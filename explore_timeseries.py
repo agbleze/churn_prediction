@@ -106,16 +106,62 @@ be relevant for the modeling task hence not used.
 
 brochure_all = brochure_views.merge(brochure_views_july, how='outer')
 
+brochure_install_all = brochure_all.merge(installs_df, how='outer', on='userId')
 
 #%% Categorical data exploration
 
 """
+A key consideration for analyzing categorical features is cardinality. Generally,
+categorical features with high cardinality when preprocessed with techniques 
+such as one hot encoding leads to expotential growth in dimensionality. Despite 
+there are techniques such as recategorizing for treating high cardinal features, 
+this task will employ eliminating very high cardinal features for modeling.
+Among other reasons for this, is the fact very little known about these 
+features to devise an appropriate strtegy for recategorization.
+
+The function for checking the cardinality of variables is defined as follows:  
 
 """
 
+#%%
+
+categorical_vars = ['brochure_id', 'productId', 'model', 'campaignId']
+
+def get_number_of_unique_values(data: pd.DataFrame, variable: str):
+    num_values = data[variable].nunique()
+    print(f'{variable} has {num_values} unique values')
+    
+    
+
+for cat_var in categorical_vars:
+    get_number_of_unique_values(data=brochure_install_all, variable=cat_var)   
+
+
+#%%
+
+# from the cardinality check, only productId is of a low cardinal with 
+# 3 unique values. Hence, productId is the only categorical variable to 
+# explored further.
+
+#%%
+
+""" Data visualization
+Visualization of page_turn_count as the target variable is undertaken as
+follows:
+"""
+
+#%%
 
 
 
 
 
 
+ 
+
+
+
+
+
+
+# %%
