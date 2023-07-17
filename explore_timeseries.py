@@ -529,11 +529,30 @@ plot_cross_validation_metric(best_params_cv_res, metric='rmse')
 Several approaches exist for time series forecasting and deep learning has 
 proven to be one of the accurate ones hence explored here.
 """
+#%%
+
 
 
 #%%
 
+## first the required packages are imported and data is read
+from numpy.random import seed
+seed(2022)
+import tensorflow as tf
+tf.random.set_seed(2022)
+import pandas as pd
+import numpy as np
+from keras import Sequential
+from keras.layers import Dense, Dropout
+from sklearn.preprocessing import LabelEncoder,OneHotEncoder
+import matplotlib.pyplot as plt
+from keras.callbacks import History  
+from tensorflow import keras
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+
+history = History()
 
 
 
