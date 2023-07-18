@@ -498,6 +498,212 @@ brochure_install_dummy.columns
 
 #%%
 
+brochure_install_prep
+
+#%%
+
+train_df = brochure_install_prep[brochure_install_prep['ds'].dt.month < 7]
+
+test_df = train_df = brochure_install_prep[brochure_install_prep['ds'].dt.month > 7]
+
+
+#%%
+train_df.shape
+
+#%%
+brochure_install_prep['ds'].dt.month
+
+#%%
+
+train_df = brochure_install_prep[brochure_install_prep['ds'].dt.month < 7].copy()
+
+#%%
+
+test_df = brochure_install_prep[brochure_install_prep['ds'].dt.month > 6]
+test_df.shape
+
+#%%
+len(train_df) / len(brochure_install_prep)
+
+
+#%% Deep learning for time series forecasting
+
+from time_series.dataset.time_series import TrainingDataSet
+
+#%%
+from time_series.utils import evaluate_model
+from time_series.models.deepar import DeepAR
+from tensorflow.python.framework.ops import disable_eager_execution
+import tensorflow as tf
+
+
+disable_eager_execution()  # for graph mode
+tf.compat.v1.experimental.output_all_intermediates(True)
+#%%
+#train_df = get_energy_demand()
+
+brochure_install_deepl_prep = brochure_install_prep.set_index(keys='ds')
+
+#%%
+tds = TrainingDataSet(brochure_install_deepl_prep, train_split=0.75)
+
+#%%
+N_EPOCHS = 200
+
+#%%
+
+
+
+#%%
+
+ar_model = DeepAR(tds)
+ar_model.instantiate_and_fit(verbose=1, epochs=N_EPOCHS)
+
+#%%
+y_predicted = ar_model.model.predict(tds.X_test)
+evaluate_model(tds=tds, y_predicted=y_predicted, columns=brochure_install_deepl_prep.columns, first_n=10)
+
+#%%
+ar_model.model
+
+#%%  #####  N-BEATS    ############
+
+from time_series.models.nbeats import NBeatsNet
+
+nb = NBeatsNet(tds)
+nb.instantiate_and_fit(verbose=1, epochs=N_EPOCHS)
+#y_predicted = nb.model.predict(tds.X_test, steps=10)
+#evaluate_model(first_n=10)
+print(nb.model.evaluate(tds.X_test, tds.y_test))
+
+#%%
+
+y_predicted = nb.model.predict(tds.X_test)
+evaluate_model(tds=tds, y_predicted=y_predicted, columns=brochure_install_deepl_prep.columns, first_n=10)
+
+#%%
+from sklearn.metrics import mean_squared_error
+
+#%%   ######### LSTM not working #########
+# from time_series.models.LSTM import LSTM
+# lstm = LSTM(tds)
+# #lstm.instantiate_and_fit(verbose=1, epochs=100)
+
+# lstm.fit(verbose=1, epochs=100)
+# #y_predicted = lstm.model.predict(tds.X_test, steps=10)
+# #evaluate_model(first_n=10)
+# print(lstm.model.evaluate(tds.X_test, tds.y_test))
+
+
+#%% ######### TRANSFORMER  ######
+# only training a 1-step prediction here:
+from time_series.models.transformer import Transformer
+
+trans = Transformer(tds)
+trans.instantiate_and_fit(verbose=1, epochs=N_EPOCHS)
+print(trans.model.evaluate(tds.X_test, tds.y_test))
+
+#%%
+y_predicted = trans.model.predict(tds.X_test)  # .reshape(-1, 10)
+evaluate_model(tds=tds, y_predicted=y_predicted, columns=brochure_install_deepl_prep.columns, first_n=10)
+
+
+#%% tcn
+
+from time_series.models.TCN import TCNModel
+tcn_model = TCNModel(tds)
+tcn_model.instantiate_and_fit(verbose=1, epochs=100)
+print(tcn_model.model.evaluate(tds.X_test, tds.y_test))
+
+
+#%%
+
+y_predicted = tcn_model.model.predict(tds.X_test)
+evaluate_model(tds=tds, y_predicted=y_predicted,
+               columns=brochure_install_deepl_prep.columns, 
+               first_n=10
+               )
+
+
+
+#%% ############ GLUONTS ######
+
+from gluonts.dataset.pandas import PandasDataset
+
+
+#%%
+train_ds = PandasDataset.from_long_dataframe(train_df, target='y', freq='H', item_id='ds')
+
+#%%
+from gluonts.torch.model.deepar import DeepAREstimator
+#%%
+estimator = DeepAREstimator(freq='H', prediction_length=24*30, 
+                            num_layers=3, 
+                            trainer_kwargs={'max_epochs':30}
+                            )
+
+predictor = estimator.train(train_ds)
+
+
+
+##########################
+#%%  deep learning from scratch
+
+import tensorflow.keras as keras
+import tensorflow as tf
+
+DROPOUT_RATIO = 0.2
+HIDDEN_NEURONS = 10
+
+callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)
+
+def create_model(passengers):
+  input_layer = keras.layers.Input(len(passengers.columns))
+
+  hiden_layer = keras.layers.Dropout(DROPOUT_RATIO)(input_layer)
+  hiden_layer = keras.layers.Dense(HIDDEN_NEURONS, activation='relu')(hiden_layer)
+
+  output_layer = keras.layers.Dropout(DROPOUT_RATIO)(hiden_layer)
+  output_layer = keras.layers.Dense(1)(output_layer)
+
+  model = keras.models.Model(inputs=input_layer, outputs=output_layer)
+
+  model.compile(loss='mse', optimizer=keras.optimizers.Adagrad(),
+    metrics=[keras.metrics.RootMeanSquaredError(), keras.metrics.MeanAbsoluteError()])
+  return model
+
+
+#%%
+brochure_only_y = brochure_install_deepl_prep[['y']]
+
+#%%
+model = create_model(brochure_only_y)
+
+#%%
+
+model.fit()
+
+
+
+
+#%%
+train_df.rename_index({})
+
+
+
+#%%
+tds.train_split
+
+#%%
+_
+
+#%%
+
+brochure_install_hourly.set_index(keys='dateCreated', inplace=True)
+
+
+#%%
+
 # (brochure_install_dummy.resample('60min', on='dateCreated')
 #  .agg({#'productId': 'count', 
 #        'page_turn_count': 'sum',
