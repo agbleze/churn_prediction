@@ -294,7 +294,7 @@ brochure_install_all_subset = (brochure_install_all[['userId', 'dateCreated',
                                               'view_duration', 'productId',
                                               'page_turn_count'
                                               ]]
-                                .dropna(subset='dateCreated')
+                                .dropna(subset=['dateCreated'])
                                 )
 
 #%%
@@ -548,7 +548,7 @@ brochure_install_deepl_prep = brochure_install_prep.set_index(keys='ds')
 tds = TrainingDataSet(brochure_install_deepl_prep, train_split=0.75)
 
 #%%
-N_EPOCHS = 200
+N_EPOCHS = 100
 
 #%%
 
@@ -764,13 +764,6 @@ join brochure_views_july to brochure_view
 
 join brochure_views to install based on userId
 """
-
-
-
-#%%
-#pd.read_fwf('churn_prediction/dataset/brochure views.txt', delimiter = " ")
-
-
 
 
 
