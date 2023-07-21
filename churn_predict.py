@@ -736,13 +736,94 @@ scaler_x = preprocessing.MinMaxScaler()
 
 x_rescaled = scaler_x.fit_transform(uni_data.reshape(-1, 1))
 
+#%%
+def custom_ts_univariate_data_prep(dataset, start, end, window, horizon):
+    X = []
+    y = []
+    
+    start = start + window
+    if end is None:
+        end = len(dataset) - horizon
+        
+    for i in range(start, end):
+        indicesx = range(i - window, i)
+        X.append(np.reshape(dataset[indicesx], (window, 1)))
+        indicesy = range(i, i + horizon)
+        y.append(dataset[indicesy])
+    return np.array(X), np.array(y)
+
 
 #%%
 
+univar_hist_window = 48
+horizon = 1
+TRAIN_SPLIT = 2100
+
+x_train_uni, y_train_uni = custom_ts_univariate_data_prep(x_rescaled, 0, 
+                                                          TRAIN_SPLIT,
+                                                          univar_hist_window, horizon
+                                                          )
+x_val_uni, y_val_uni = custom_ts_univariate_data_prep(x_rescaled, TRAIN_SPLIT, None,
+                                                      univar_hist_window, horizon
+                                                      )
+
+#%%
+x_train_uni
+
+y_train_uni
 
 
 
+#%%
 
+BATCH_SIZE = 256
+BUFFER_SIZE = 150
+
+train_univariate = tf.data.Dataset.from_tensor_slices((x_train_uni, y_train_uni))
+train_univariate = train_univariate.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
+
+val_univariate = tf.data.Dataset.from_tensor_slices((x_val_uni, y_val_uni))
+val_univariate = val_univariate.batch(BATCH_SIZE).repeat()
+
+
+#%%
+model_path = "LSTM_Univarient_brochure.h5"
+
+#%%
+
+lstm_model = tf.keras.models.Sequential(
+                                        [tf.keras.layers.LSTM(100, input_shape=x_train_uni.shape[-2:], return_sequences=True),
+                                        tf.keras.layers.Dropout(0.2),
+                                        tf.keras.layers.LSTM(units=50, return_sequences=False),
+                                        tf.keras.layers.Dropout(0.2),
+                                        tf.keras.layers.Dense(units=1)
+                                        ]
+                                    )
+
+lstm_model.compile(optimizer='adam', loss='mse')
+
+#%%
+
+EVALUATION_INTERNAL = 100
+EPOCHS = 150
+history = lstm_model.fit(train_univariate, epochs=EPOCHS, steps_per_epoch=EVALUATION_INTERNAL,
+                         validation_data=val_univariate,
+                         validation_steps=50, verbose=1,
+                         callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0,
+                                                                     patience=10, verbose=1, mode='min'
+                                                                     ),
+                                    tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_loss',
+                                                                       save_best_only=True, mode='min',
+                                                                       verbose=0)
+                                    ]
+                         )
+
+#%%
+
+trained_model = tf.keras.models.load_model(model_path)
+trained_model.summary()
+
+#%%
 
 #%%
 
