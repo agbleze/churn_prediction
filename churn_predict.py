@@ -504,7 +504,8 @@ brochure_install_prep
 
 train_df = brochure_install_prep[brochure_install_prep['ds'].dt.month < 7]
 
-test_df = train_df = brochure_install_prep[brochure_install_prep['ds'].dt.month > 7]
+#%%
+test_df = brochure_install_prep[brochure_install_prep['ds'].dt.month > 6]
 
 
 #%%
@@ -700,6 +701,58 @@ _
 #%%
 
 brochure_install_hourly.set_index(keys='dateCreated', inplace=True)
+
+
+
+
+#%%  ##########  LSTM univariante single step style
+
+import tensorflow as tf
+from sklearn import preprocessing
+
+#%%
+
+tf.random.set_seed(2023)
+np.random.seed(2023)
+
+#%%
+
+validate = brochure_install_prep['y'].tail(48)
+
+df_without_validate = brochure_install_prep.drop(validate.index)
+
+#%%
+uni_data = df_without_validate['y']
+uni_data.index = df_without_validate['ds']
+uni_data.head()
+
+#%%
+
+df_without_validate.info()
+
+#%%
+uni_data = uni_data.values
+scaler_x = preprocessing.MinMaxScaler()
+
+x_rescaled = scaler_x.fit_transform(uni_data.reshape(-1, 1))
+
+
+#%%
+
+
+
+
+
+
+#%%
+
+#[brochure_install_prep[validate.index]]
+
+
+
+
+
+
 
 
 #%%
