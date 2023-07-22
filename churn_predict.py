@@ -761,9 +761,11 @@ TRAIN_SPLIT = 2100
 
 x_train_uni, y_train_uni = custom_ts_univariate_data_prep(x_rescaled, 0, 
                                                           TRAIN_SPLIT,
-                                                          univar_hist_window, horizon
+                                                          univar_hist_window, 
+                                                          horizon
                                                           )
-x_val_uni, y_val_uni = custom_ts_univariate_data_prep(x_rescaled, TRAIN_SPLIT, None,
+x_val_uni, y_val_uni = custom_ts_univariate_data_prep(x_rescaled, 
+                                                      TRAIN_SPLIT, None,
                                                       univar_hist_window, horizon
                                                       )
 
@@ -885,12 +887,94 @@ plt.legend(("Actual", "predicted"))
 plt.show()
     
 
-#%% ###### univariate horizon style  ########
+
+
+
+#%% ##################### univariate horizon style  ##########################
+
+long_horizon = 10
+
+lstm_model_lg_hori = tf.keras.models.Sequential([
+    tf.keras.layers.LSTM(100, input_shape=x_train_uni.shape[-2:], return_sequences=True),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.LSTM(units=50, return_sequences=False),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(units=long_horizon)
+])
+
+lstm_model_lg_hori.compile(optimizer='adam', loss='mse')
+
+model_path = "horizon_style_LSTM_Univarient.h5"
+
+#%%
+
+history_lg_hori = lstm_model_lg_hori.fit(train_univariate, epochs=EPOCHS, 
+                                         steps_per_epoch=EVALUATION_INTERNAL,
+                                            validation_data=val_univariate,
+                                            validation_steps=50, verbose=1,
+                                            callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0,
+                                                                                        patience=10, verbose=1, mode='min'
+                                                                                        ),
+                                                        tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_loss',
+                                                                                        save_best_only=True, mode='min',
+                                                                                        verbose=0)
+                                                        ]
+                                            )
+
+
+#%% load model
+
+trained_model_lg_hori = tf.keras.models.load_model(model_path)
+# show model architecture
+trained_model_lg_hori.summary()
+
+#%% plot model loss history
+
+def plot_loss_history(history):
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train loss', 'validation loss'], loc='upper left')
+    plt.rcParams['figure.figsize'] = [16, 9]
+    return plt.show()
+        
+plot_loss_history(history=history_lg_hori)
+
+#%% make prediction
+
+uni_lg = brochure_install_prep['y']
+validatehori_lg = uni_lg.tail(48)
+validatehist_lg = validatehori_lg.values
+
+scale_x_lg = preprocessing.MinMaxScaler()
+val_rescaled_lg = scale_x_lg.fit_transform(validatehist_lg.reshape(-1, 1))
+val_rescale_lg = val_rescaled_lg.reshape((1, val_rescaled_lg.shape[0], 1))
+
+predicted_results_lg = trained_model_lg_hori.predict(val_rescaled_lg)
+predicted_inver_res_lg = scale_x_lg.inverse_transform(predicted_results_lg)
+predicted_inver_res_lg
+
+#%%
+timeseries_evaluation_metrics_func(validate, predicted_inver_res_lg[0])
+
+#%%
+plt.plot(list(validate))
+plt.plot(list(predicted_inver_res_lg[0]))
+plt.title('Actual vs Predicted')
+plt.ylabel('Page turn count')
+plt.legend(("Actual", "Predicted"))
+plt.show()
 
 
 
 
 
+
+
+
+#%%
 
 #%%
 
