@@ -825,6 +825,73 @@ trained_model.summary()
 
 #%%
 
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train loss', 'validation loss'], loc='upper left')
+plt.rcParams['figure.figsize'] = [16, 9]
+plt.show()
+
+#%%
+uni = brochure_install_prep['y']
+validatehori = uni.tail(48)
+validatehist = validatehori.values
+result = []
+
+# define forecast len
+window_len = 48
+val_rescaled = scaler_x.fit_transform(validatehist.reshape(-1, 1))
+
+for i in range(1, window_len+1):
+    val_rescaled = val_rescaled.reshape((1, val_rescaled.shape[0], 1))
+    predicted_results = trained_model.predict(val_rescaled)
+    print(f'predicted: {predicted_results}')
+    result.append(predicted_results[0])
+    val_rescaled = np.append(val_rescaled[:,1:], [[predicted_results]])
+    print(val_rescaled)
+    
+    
+#%%
+result_inv_trans = scaler_x.inverse_transform(result)
+result_inv_trans
+
+
+#%%
+from sklearn import metrics
+
+def timeseries_evaluation_metrics_func(y_true, y_pred):
+    def mean_absolute_percentage_error(y_true, y_pred):
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+        return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    print('Evaluation metric results:-')
+    print(f'MSE is : {metrics.mean_squared_error(y_true, y_pred)}')
+    print(f'MAE is : {metrics.mean_absolute_error(y_true, y_pred)}')
+    print(f'RMSE is : {np.sqrt(metrics.mean_squared_error(y_true, y_pred))}')
+    print(f'MAPE is : {mean_absolute_percentage_error(y_true, y_pred)}')
+    print(f'R2 is : {metrics.r2_score(y_true, y_pred)}', end='\n\n')
+ 
+    
+#%%
+timeseries_evaluation_metrics_func(validate, result_inv_trans)
+
+#%%
+plt.plot(list(validate))
+plt.plot(list(result_inv_trans))
+plt.title("Actual vs Predicted")
+plt.ylabel("Traffic volume")
+plt.legend(("Actual", "predicted"))
+plt.show()
+    
+
+#%% ###### univariate horizon style  ########
+
+
+
+
+
+
 #%%
 
 #[brochure_install_prep[validate.index]]
