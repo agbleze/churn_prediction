@@ -945,7 +945,7 @@ plot_loss_history(history=history_lg_hori)
 #%% make prediction
 
 uni_lg = brochure_install_prep['y']
-validatehori_lg = uni_lg.tail(48)
+validatehori_lg = uni_lg.tail(10)
 validatehist_lg = validatehori_lg.values
 
 scale_x_lg = preprocessing.MinMaxScaler()
@@ -957,10 +957,10 @@ predicted_inver_res_lg = scale_x_lg.inverse_transform(predicted_results_lg)
 predicted_inver_res_lg
 
 #%%
-timeseries_evaluation_metrics_func(validate, predicted_inver_res_lg[0])
+timeseries_evaluation_metrics_func(validatehist_lg, predicted_inver_res_lg[0])
 
 #%%
-plt.plot(list(validate))
+plt.plot(list(validatehist_lg))
 plt.plot(list(predicted_inver_res_lg[0]))
 plt.title('Actual vs Predicted')
 plt.ylabel('Page turn count')
@@ -971,11 +971,179 @@ plt.show()
 
 
 
+#%%  ######## Bidirectional LSTM Univariate  ###################
+
+
+bi_lstm_model = tf.keras.models.Sequential([
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(100, return_sequences=True),
+                                  input_shape=x_train_uni.shape[-2:]),
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(50)),
+    tf.keras.layers.Dense(20, activation='softmax'),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(units=1)
+])
+
+bi_lstm_model.compile(optimizer='adam', loss='mse')
+
+bi_model_path_sg_hori = "bidirectional_LSTM_sg_hori.h5"
+
+
+#%%
+bilstm_history_sghori = bi_lstm_model.fit(train_univariate, epochs=20, 
+                                         steps_per_epoch=EVALUATION_INTERNAL,
+                                            validation_data=val_univariate,
+                                            validation_steps=50, verbose=1,
+                                            callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0,
+                                                                                        patience=10, verbose=1, mode='min'
+                                                                                        ),
+                                                        tf.keras.callbacks.ModelCheckpoint(bi_model_path_sg_hori, monitor='val_loss',
+                                                                                        save_best_only=True, mode='min',
+                                                                                        verbose=0)
+                                                        ]
+                                            )
+#%%
+trained_model_bilstm_sghori = tf.keras.models.load_model(bi_model_path_sg_hori)
+trained_model_bilstm_sghori.summary()
+
+#%%
+plot_loss_history(bilstm_history_sghori)
+
+#%%
+# validate data is last 10 hours of all data == test date
+validate = brochure_install_prep['y'].tail(10)
+
+# remaining data after validation data taken
+uni = brochure_install_prep.drop(validate.index)  #['y']#
+
+# take target and reset index to date column
+uni_data = uni['y']
+uni_data.index = uni['ds']
+
+# validatehori is last 48 hours of training data
+validatehori = uni_data.tail(48)
+validatehist = validatehori.values
+
+# scale validatehori
+scaler = preprocessing.MinMaxScaler()
+
+val_rescaled = scaler.fit_transform(validatehist.reshape(-1, 1))
+
+#%%
+def predict_single_step_horizon(model, preprocessed_x, 
+                                forecast_window_len=10):
+    result = []
+    for i in range(1, forecast_window_len+1):
+        val_rescaled = preprocessed_x.reshape((1, preprocessed_x.shape[0], 1))
+        predicted_results = model.predict(val_rescaled)
+        result.append(predicted_results[0])
+        
+    return result
+
+
+results = predict_single_step_horizon(model=trained_model_bilstm_sghori, 
+                            preprocessed_x=val_rescaled,
+                            forecast_window_len=10
+                            )
+
+result_inv_trans = scaler.inverse_transform(results)
+
+#%%
+timeseries_evaluation_metrics_func(validate, result_inv_trans)
+
+#%%
+
+plt.plot(list(validate))
+plt.plot(list(result_inv_trans))
+plt.title("Actual vs Predicted")
+plt.ylabel("page turn count")
+plt.legend(('Actual', 'Predicted'))
+plt.show()
+
+
+
+
+
+#%%  ############  multivariate time series ######################
+##### LSTM Horizon style  #######
+
+# create weekday feature, hour, day of week, day of month, weekend feature
+brochure_install_prep
+
+brochure_install_prep_transform = brochure_install_prep.copy()
+
+#%% hour
+
+brochure_install_prep['day_of_week'] = brochure_install_prep['ds'].dt.day_of_week
+brochure_install_prep['hour'] = brochure_install_prep['ds'].dt.hour
+brochure_install_prep['month_day'] = brochure_install_prep['ds'].dt.day
+
+#%%
+brochure_install_prep['ds'].dt.day_name()
+
+#%%%
+
+brochure_install_prep['weekend'] = (np.where(brochure_install_prep['ds']
+                                             .dt.day_name().isin(["Saturday", "Sunday"]), 
+                                             1, 0
+                                             )
+                                    )
+
+#%%
+
+multi_scaler = preprocessing.StandardScaler()
+
+#%%
+
+
+
+
+columns_to_scale = brochure_install_prep_transform.columns[2:-1]
+
+#%%
+
+multi_scaler.fit(brochure_install_prep_transform[columns_to_scale])
+
+#%%
+
+brochure_install_prep[columns_to_scale] = multi_scaler.transform(brochure_install_prep[columns_to_scale])
+
+#%%
+
+y_scaler = preprocessing.StandardScaler()
+
+y_scaler.fit_transform(brochure_install_prep['y'])
+
+
 
 
 
 #%%
+brochure_install_prep[['view_duration_scaled', 
+                       'day_of_week_scaled', 'hour_scaled', 'month_day_scaled']] = multi_scaler.fit_transform(brochure_install_prep[['view_duration', 'day_of_week', 'hour', 'month_day']])
 
+
+#%%
+
+brochure_install_prep.drop(columns=['view_duration_scaled', 'day_of_week_scaled', 
+                                    'hour_scaled', 'month_day_scaled'],
+                           inplace=True
+                           )
+
+#%%
+
+brochure_install_prep_transform = brochure_install_prep.copy()
+
+#%%
+
+brochure_install_prep.columns[2:-5].values
+
+
+#%%
+
+#brochure_install_prep['dayname'] = brochure_install_prep['ds'].dt.day_name()
+
+
+#brochure_install_prep.drop(columns='dayname', inplace=True)
 #%%
 
 #[brochure_install_prep[validate.index]]
