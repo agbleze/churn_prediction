@@ -1071,32 +1071,33 @@ brochure_install_prep
 
 brochure_install_prep_transform = brochure_install_prep.copy()
 
+
 #%% hour
 
-brochure_install_prep['day_of_week'] = brochure_install_prep['ds'].dt.day_of_week
-brochure_install_prep['hour'] = brochure_install_prep['ds'].dt.hour
-brochure_install_prep['month_day'] = brochure_install_prep['ds'].dt.day
-
-#%%
-brochure_install_prep['ds'].dt.day_name()
-
-#%%%
-
-brochure_install_prep['weekend'] = (np.where(brochure_install_prep['ds']
+brochure_install_prep_transform['day_of_week'] = brochure_install_prep_transform['ds'].dt.day_of_week
+brochure_install_prep_transform['hour'] = brochure_install_prep_transform['ds'].dt.hour
+brochure_install_prep_transform['month_day'] = brochure_install_prep_transform['ds'].dt.day
+brochure_install_prep_transform['weekend'] = (np.where(brochure_install_prep_transform['ds']
                                              .dt.day_name().isin(["Saturday", "Sunday"]), 
                                              1, 0
                                              )
                                     )
+
+
+#%% # take last 10 hour as validation set
+
+validate_multivar = brochure_install_prep_transform.tail(10)
+#brochure_install_prep_transform[2:].tail(10)
+
+#%%
+train_multivar = brochure_install_prep_transform.drop(validate_multivar.index)
+
 
 #%%
 
 multi_scaler = preprocessing.StandardScaler()
 
 #%%
-
-
-
-
 columns_to_scale = brochure_install_prep_transform.columns[2:-1]
 
 #%%
@@ -1104,18 +1105,36 @@ columns_to_scale = brochure_install_prep_transform.columns[2:-1]
 multi_scaler.fit(brochure_install_prep_transform[columns_to_scale])
 
 #%%
-
-brochure_install_prep[columns_to_scale] = multi_scaler.transform(brochure_install_prep[columns_to_scale])
+brochure_install_prep_transform[columns_to_scale] = multi_scaler.transform(brochure_install_prep_transform[columns_to_scale])
 
 #%%
 
 y_scaler = preprocessing.StandardScaler()
 
-y_scaler.fit_transform(brochure_install_prep['y'])
+brochure_install_prep_transform['y'] = y_scaler.fit_transform(brochure_install_prep_transform[['y']])
+
+#%%
+brochure_install_prep_transform
+
+#%% # take last 10 hour as validation set
+
+validate_multivar = brochure_install_prep_transform.tail(20)
+#brochure_install_prep_transform[2:].tail(10)
+
+#%%
+train_multivar = brochure_install_prep_transform.drop(validate_multivar.index)
+
+
+# .copy().set_index(keys='ds')
 
 
 
 
+
+#%%
+
+
+preprocessing.MinMaxScaler().fit_transform(brochure_install_prep_transform[['y']])
 
 #%%
 brochure_install_prep[['view_duration_scaled', 
