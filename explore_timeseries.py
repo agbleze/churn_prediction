@@ -527,9 +527,305 @@ plot_cross_validation_metric(best_params_cv_res, metric='rmse')
 
 """
 Several approaches exist for time series forecasting and deep learning has 
-proven to be one of the accurate ones hence explored here.
+proven to be one of the accurate ones hence explored here. Recurrent Neural 
+Networks (RNN) are designed to be well suited for sequence data and 
+Long Short Term Memory (LSTM) has made significant contribution in 
+this area. A number of deep learning models will be 
+experimented. Due to the limited time for computation, the models will 
+be trained with limited epoch and an architecture that allows experimentation within 
+the timeframe allowed.
+
+
+Features used
+
+In addition to the time series data, date and time related features were generated 
+from the datetime feature for the analysis. This included, day of the week and month,
+whether a given day is a weekend or not, hour of the day among others.
+
+Horiron style is adopted for training and evaluation the forecast. 
+The models are trained on a 48 hours window and then used to predict 
+the next 10 hours horizon. By this, when the model is trained on 
+1 to 48 hours, it is used to forecast 49th to 50th hour and then the 
+trained on 2nd to 49th hour data to predict the 50th hour to 60th hour
+in that manner. This informed how the data was splitted and 
+prepared for training. For the testing dataset, the last 10 hours of 
+all the was reserved. The remaining dataset is used for 
+training and validation.
+
 """
 #%%
+
+"""
+## Feature engineering
+The datetime features were created as follows:
+"""
+
+#%%
+brochure_install_prep_transform = brochure_install_prep.copy()
+
+brochure_install_prep_transform['day_of_week'] = brochure_install_prep_transform['ds'].dt.day_of_week
+brochure_install_prep_transform['hour'] = brochure_install_prep_transform['ds'].dt.hour
+brochure_install_prep_transform['month_day'] = brochure_install_prep_transform['ds'].dt.day
+brochure_install_prep_transform['weekend'] = (np.where(brochure_install_prep_transform['ds']
+                                             .dt.day_name().isin(["Saturday", "Sunday"]), 
+                                             1, 0
+                                             )
+                                    )
+
+
+#%% # take last 10 hour as testing dataset
+
+validate_multivar = brochure_install_prep_transform.tail(10)
+#brochure_install_prep_transform[2:].tail(10)
+
+#%%
+# The rest of the data excluding testing dataset is used for training and validation.
+train_multivar = brochure_install_prep_transform.drop(validate_multivar.index)
+
+
+#%%
+"""
+### Data preprocessing
+
+Numeric features such as day of the month, view duration among others 
+were scaled using MinMax scaling. The weekend feature which indicates,
+whether a day is a weekend or not is binary with weekends assigned the 
+value of 1. Thus, this feature is not numeric hence not scaled like 
+the other numeric features.
+Normalization is done as an attempt to reduce training time for 
+convergence  
+"""
+#%%
+
+
+x_multi_scaler = preprocessing.MinMaxScaler()
+
+#%%
+columns_to_scale = train_multivar.columns[2:-1]
+
+#%%
+
+x_multi_scaler.fit_transform(train_multivar[columns_to_scale]).shape
+
+#%%
+train_multivar[columns_to_scale] = x_multi_scaler.transform(train_multivar[columns_to_scale])
+
+
+
+#%%
+
+"""
+### Data splitting for horion style forecasting
+
+Splitting the data for horizon style forecasting as describe earlier is 
+
+undertake as follows:
+"""
+
+#%%
+def horizon_style_data_splitter(predictors: pd.DataFrame, 
+                                target: pd.DataFrame, start: int, 
+                                end: int, window: int, horizon: int
+                                ):
+    X = []
+    y = []
+    start = start + window
+    if end is None:
+        end = len(predictors) - horizon
+        
+    for i in range(start, end):
+        indices = range(i-window, i)
+        X.append(predictors.iloc[indices])
+        
+        indicey = range(i+1, i+1+horizon)
+        y.append(target.iloc[indicey])
+    return np.array(X), np.array(y)
+
+
+dataX = train_multivar[train_multivar.columns[1:]] #x_multi_scaler.transform(train_multivar[columns_to_scale]) #
+
+dataY = train_multivar[['y']] #y_scaler.fit_transform(train_multivar[['y']]) #
+
+#%%  ##########  
+
+hist_window_multi = 48
+horizon_multi = 10
+TRAIN_SPLIT = 2100
+
+x_train_multi, y_train_multi = horizon_style_data_splitter(predictors=dataX, target=dataY,
+                                                         start=0, end=TRAIN_SPLIT,
+                                                         window=hist_window_multi,
+                                                         horizon=horizon_multi
+                                                         )
+
+x_val_multi, y_val_multi = horizon_style_data_splitter(predictors=dataX, target=dataY,
+                                                     start=TRAIN_SPLIT, end=None,
+                                                     window=hist_window_multi,
+                                                     horizon=horizon_multi
+                                                     )
+
+
+#%%
+
+"""
+During each training session, only a subset of the all training samples are used. 
+Training in batches requires specifing the sample to to train for each mini-batch.
+This is define to be 64.
+"""
+
+#%%
+
+BATCH_SIZE = 64
+BUFFER_SIZE = 100
+
+
+train_data_multi = tf.data.Dataset.from_tensor_slices((x_train_multi, y_train_multi))
+train_data_multi = train_data_multi.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
+
+val_data_multi = tf.data.Dataset.from_tensor_slices((x_val_multi, y_val_multi))
+val_data_multi = val_data_multi.batch(BATCH_SIZE).repeat()
+
+#%%
+
+"""
+### Evaluation of models
+
+The performance of the model will be assessed based on RMSE and other evaluation metrics 
+will be reported. This will reported using function defined below:
+"""
+
+def timeseries_evaluation_metrics_func(y_true, y_pred):
+    def mean_absolute_percentage_error(y_true, y_pred):
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+        return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    print('Evaluation metric results:-')
+    print(f'MSE is : {metrics.mean_squared_error(y_true, y_pred)}')
+    print(f'MAE is : {metrics.mean_absolute_error(y_true, y_pred)}')
+    print(f'RMSE is : {np.sqrt(metrics.mean_squared_error(y_true, y_pred))}')
+    print(f'MAPE is : {mean_absolute_percentage_error(y_true, y_pred)}')
+    print(f'R2 is : {metrics.r2_score(y_true, y_pred)}', end='\n\n')
+ 
+
+#%% plot model loss history
+"""
+Understanding the validation loss changes over various epoch is important to gauge whether 
+further training will bring about any improvement to decide the next line of action. 
+For this, a function is defined to plot the loss history as follows:
+
+"""
+
+def plot_loss_history(history):
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train loss', 'validation loss'], loc='upper left')
+    plt.rcParams['figure.figsize'] = [16, 9]
+    return plt.show()
+
+
+
+#%%
+
+"""
+Long Short Term Memory (LSTM) for forecasting
+
+LSTM is define for training and forecasting page turn count. The architecture is defined 
+to include 556 neurons for the input layer that feeds directly to a hidden layer 
+of 556 neurons and two other hidden layers down stream with 256 neurons. The output layer
+makes a prediction for 10 outputs which corresponds to the number of forecasting horizons
+defined to be 10 hours. This simplified architecture forms the basis for most of the 
+models implemented. LSTM is defined as follows:
+
+"""
+
+#%%
+lstm_multi = tf.keras.models.Sequential()
+lstm_multi.add(tf.keras.layers.LSTM(units=556, input_shape=x_train_multi.shape[-2:], 
+                                    return_sequences=True)
+               )
+#lstm_multi.add(tf.keras.layers.Dropout(0.2))
+lstm_multi.add(tf.keras.layers.LSTM(units=556, return_sequences=False))
+#lstm_multi.add(tf.keras.layers.Dropout(0.2))
+lstm_multi.add(tf.keras.layers.Dense(256))
+lstm_multi.add(tf.keras.layers.Dense(256))
+lstm_multi.add(tf.keras.layers.Dense(units=horizon_multi))
+lstm_multi.compile(optimizer='adam', loss='mse')
+
+#%%
+model_path_lstm_multi = 'lstm_multivariate.h5' 
+
+
+#%%
+EVALUATION_INTERVAL = 20
+EPOCHS = 10
+history_multi = lstm_multi.fit(x=train_data_multi, epochs=EPOCHS, 
+                         steps_per_epoch=EVALUATION_INTERVAL,
+                         validation_data=val_data_multi,
+                         validation_steps=5, verbose=1, 
+                         callbacks=[
+                            #  tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                            #                                          min_delta=0,patience=10,
+                            #                                          verbose=1,mode='min'
+                            #                                          ),
+                                    tf.keras.callbacks.ModelCheckpoint(model_path_lstm_multi, 
+                                                                       monitor='val_loss',
+                                                                       save_best_only=True,
+                                                                       mode="min",
+                                                                       verbose=0
+                                                                       )
+                                    ]
+                         )
+
+
+
+#%%
+trained_model_multi = tf.keras.models.load_model(model_path_lstm_multi)
+
+plot_loss_history(history_multi)
+
+#%%
+
+trained_model_multi.summary()
+
+#%% 
+
+#train_multivar[columns_to_scale].tail(48)
+
+
+#%% take the last 48 hours as input for prediction
+data_val = train_multivar[train_multivar.columns[1:]].tail(48)
+
+val_rescaled = np.array(data_val).reshape(1, data_val.shape[0], data_val.shape[1])
+
+#%%
+
+predicted_results = trained_model_multi.predict(val_rescaled)
+
+#predicted_results_inv_trans = y_scaler.inverse_transform(predicted_results)
+
+
+#%%
+timeseries_evaluation_metrics_func(y_true=validate_multivar['y'],
+                                   y_pred=predicted_results[0]
+                                   )
+
+
+#%%
+
+plt.plot(list(validate_multivar['y']))
+plt.plot(list(predicted_results[0]))
+plt.title("Actual vs Predicted")
+plt.ylabel("page turn count")
+plt.legend(('Actual', 'Predicted'))
+plt.show()
+
+
+
+
+
+
 
 
 
