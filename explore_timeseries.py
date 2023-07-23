@@ -741,6 +741,9 @@ models implemented. LSTM is defined as follows:
 """
 
 #%%
+tf.random.set_seed(2023)
+np.random.seed(2023)
+
 lstm_multi = tf.keras.models.Sequential()
 lstm_multi.add(tf.keras.layers.LSTM(units=556, input_shape=x_train_multi.shape[-2:], 
                                     return_sequences=True)
@@ -785,26 +788,28 @@ trained_model_multi = tf.keras.models.load_model(model_path_lstm_multi)
 
 plot_loss_history(history_multi)
 
-#%%
+#%% ## show model architechture
 
 trained_model_multi.summary()
 
-#%% 
-
-#train_multivar[columns_to_scale].tail(48)
-
-
 #%% take the last 48 hours as input for prediction
-data_val = train_multivar[train_multivar.columns[1:]].tail(48)
 
-val_rescaled = np.array(data_val).reshape(1, data_val.shape[0], data_val.shape[1])
+"""
+### Preparing for forecasting
+
+To forecast the number of page turn count for next 10 hours, 
+the sequence of values as well as datetime features extracted are used. 
+For this, the last 48 hours are feed to the model to forecast for the next 10 hours.
+The forecast is compared with the ground truth in the test dataset and evaluation 
+metrics are computed. This is implemented as follows:
+
+
+"""
 
 #%%
-
+data_val = train_multivar[train_multivar.columns[1:]].tail(48)
+val_rescaled = np.array(data_val).reshape(1, data_val.shape[0], data_val.shape[1])
 predicted_results = trained_model_multi.predict(val_rescaled)
-
-#predicted_results_inv_trans = y_scaler.inverse_transform(predicted_results)
-
 
 #%%
 timeseries_evaluation_metrics_func(y_true=validate_multivar['y'],
@@ -822,7 +827,34 @@ plt.legend(('Actual', 'Predicted'))
 plt.show()
 
 
+def compare_forecast_actual_graph(forecast, actual, title="Actual vs Predicted",
+                                  yaxsis_label="page turn count",
+                                  xaxsis_label="horizon (hourly)",
+                                  legend: set = ('Actual', 'Predicted')):
+    plt.plot(list(actual['y']))
+    plt.plot(list(forecast[0]))
+    plt.title(title)
+    plt.ylabel(yaxsis_label)
+    plt.xlabel(xaxsis_label)
+    plt.legend(legend)
+    return plt.show()
 
+compare_forecast_actual_graph(forecast=validate_multivar, actual=predicted_results)
+
+
+
+#%%
+"""
+The above process depicts how to use deep learning particularly LSTM for time series 
+forecasting using both sequence of data and datetime features. This is a case of 
+multivariant time series forecasting. 
+
+The logic presented here holds true for a number of other deep learning forecasting models 
+which are experimented hereafter. The code for such experimentation is provided for 
+Bidirectional LSTM and Convolutional Neural Networks (CNN) as follows
+"""
+### 
+    
 
 
 
