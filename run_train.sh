@@ -1,0 +1,1 @@
+python3 train.py -- data_store=data_store -- file_name=brochure_install_prep.csv -- save-dir=model_store
